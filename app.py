@@ -1,8 +1,8 @@
 import streamlit as st
 import numpy as np
+import tensorflow as tf
 import joblib
-import onnxruntime as ort
-import os
+import random
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(page_title="Prediksi Suhu", page_icon="🌡️")
@@ -75,3 +75,4 @@ if st.button("Prediksi", type="primary"):
         st.success(f"Prediksi Suhu Besok: **{hasil:.2f} °C**")
     except Exception as e:
         st.error(f"Error: {e}")
+
