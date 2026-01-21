@@ -10,7 +10,6 @@ import altair as alt
 MODEL_PATH = 'model_suhu.h5'
 SCALER_PATH = 'scaler_suhu.save'
 
-model = tf.keras.models.load_model(MODEL_PATH, compile=False)
 scaler = joblib.load(SCALER_PATH)
 
 # =====================
@@ -146,4 +145,5 @@ elif menu == "Prediksi Suhu":
                 tooltip=['Suhu (°C)', 'Kelembaban (%)', 'Kecepatan Angin (m/s)', 'Tekanan (hPa)']
             ).properties(title="💧 Tren Kelembaban 7 Hari Terakhir")
             st.altair_chart(chart_hum, use_container_width=True)
+
 
