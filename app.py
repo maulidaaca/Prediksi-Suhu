@@ -1,149 +1,89 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
 import joblib
-import altair as alt
+import onnxruntime as ort
+import os
 
-# =====================
-# Load Model & Scaler
-# =====================
-MODEL_PATH = 'model_suhu.h5'
-SCALER_PATH = 'scaler_suhu.save'
+# --- KONFIGURASI HALAMAN ---
+st.set_page_config(page_title="Prediksi Suhu Harian", page_icon="🌡️")
+st.title("🌡️ Prediksi Suhu Harian (LSTM)")
+st.caption("Menggunakan Model ONNX untuk performa ringan")
 
-scaler = joblib.load(SCALER_PATH)
+# --- FUNGSI LOAD MODEL & SCALER ---
+@st.cache_resource
+def load_resources():
+    # Cek lokasi file (apakah di folder 'model/' atau di root)
+    if os.path.exists("model/scaler_suhu.save"):
+        scaler_path = "model/scaler_suhu.save"
+        model_path = "model/model_suhu.onnx"
+    else:
+        # Fallback jika file sejajar dengan app.py (untuk GitHub/Streamlit Cloud)
+        scaler_path = "scaler_suhu.save"
+        model_path = "model_suhu.onnx"
 
-# =====================
-# Page Config
-# =====================
-st.set_page_config(
-    page_title="Prediksi Suhu Besok",
-    page_icon="🌡️",
-    layout="wide"
-)
+    try:
+        scaler = joblib.load(scaler_path)
+        ort_session = ort.InferenceSession(model_path)
+        return scaler, ort_session
+    except Exception as e:
+        st.error(f"Gagal memuat file model. Error: {e}")
+        return None, None
 
-# =====================
-# Sidebar: Menu & Pelengkap
-# =====================
-st.sidebar.title("🌤️ Prediksi Suhu Besok")
-menu = st.sidebar.radio("Pilih Menu:", ["Tentang Sistem", "Prediksi Suhu"])
-st.sidebar.markdown("---")
-st.sidebar.markdown("Email: ayudwinengtias@gmail.com")
-st.sidebar.markdown("Teknologi: LSTM, Python, Streamlit")
+# Load Resources
+scaler, ort_session = load_resources()
 
-# =====================
-# Menu: Tentang Sistem
-# =====================
-if menu == "Tentang Sistem":
-    st.title("Tentang Sistem Prediksi Suhu")
-    st.markdown("Sistem ini membantu memprediksi suhu besok berdasarkan **data 7 hari terakhir** menggunakan **Deep Learning (LSTM)**.")
+# Hentikan aplikasi jika model gagal dimuat
+if scaler is None or ort_session is None:
+    st.warning("Mohon pastikan file 'model_suhu.onnx' dan 'scaler_suhu.save' sudah ada.")
+    st.stop()
 
-    # =======================
-    # Bagian 1: Data Diri Perancang
-    # =======================
-    with st.container():
-        st.subheader("👩‍💻 Data Diri Perancang Sistem")
-        st.markdown("""
-- **Nama:** Ayu Dwi Nengtias  
-- **Prodi:** Teknik Informatika  
-- **Universitas:** Universitas Muhammadiyah Riau  
-- **Kontak:** ayudwinengtias@gmail.com
-""")
+# Dapatkan nama input & output layer ONNX otomatis
+input_name = ort_session.get_inputs()[0].name
+output_name = ort_session.get_outputs()[0].name
 
-    # =======================
-    # Bagian 2: Deskripsi Sistem
-    # =======================
-    with st.container():
-        st.subheader("📝 Deskripsi Sistem")
-        st.info("""
-Sistem ini adalah aplikasi prediksi suhu besok berbasis **Deep Learning (LSTM)**.  
-Data yang digunakan: **7 hari terakhir** dengan fitur:  
-- Suhu (°C)  
-- Kelembaban (%)  
-- Kecepatan Angin (m/s)  
-- Tekanan (hPa)  
+# --- FORM INPUT SUHU (7 HARI) ---
+st.write("Masukkan rata-rata suhu **7 hari terakhir**:")
 
-**Tujuan Sistem:**  
-- Membantu memprediksi suhu besok berdasarkan tren data 7 hari terakhir.  
-- Mempermudah perencanaan kegiatan harian yang tergantung cuaca.
-""")
+col1, col2 = st.columns(2)
+inputs = []
 
-    st.markdown("---")
+with col1:
+    d1 = st.number_input("Hari ke-1 (7 hari lalu)", value=30.0, step=0.1)
+    d2 = st.number_input("Hari ke-2 (6 hari lalu)", value=31.2, step=0.1)
+    d3 = st.number_input("Hari ke-3 (5 hari lalu)", value=29.8, step=0.1)
+    d4 = st.number_input("Hari ke-4 (4 hari lalu)", value=33.1, step=0.1)
 
-    # =======================
-    # Bagian 3: Instruksi / Petunjuk
-    # =======================
-    with st.container():
-        st.subheader("📖 Petunjuk / Instruksi Menggunakan Sistem")
-        st.success("""
-1. Pilih menu **Prediksi Suhu** di sidebar.  
-2. Masukkan data 7 hari terakhir di tabel input.  
-3. Klik tombol **Prediksi Suhu Besok**.  
-4. Hasil prediksi dan grafik tren akan muncul di layar.
-""")
+with col2:
+    d5 = st.number_input("Hari ke-5 (3 hari lalu)", value=32.0, step=0.1)
+    d6 = st.number_input("Hari ke-6 (H-2)", value=31.5, step=0.1)
+    d7 = st.number_input("Hari ke-7 (Kemarin)", value=32.5, step=0.1)
 
+inputs = [d1, d2, d3, d4, d5, d6, d7]
 
-# =====================
-# Menu: Prediksi Suhu
-# =====================
-elif menu == "Prediksi Suhu":
-    st.title("🌡️ Prediksi Suhu Besok")
-    st.markdown("Masukkan data 7 hari terakhir di tabel berikut:")
-
-    # ---- Tabel Input ----
-    default_data = {
-        "Suhu (°C)": [30.0]*7,
-        "Kelembaban (%)": [70.0]*7,
-        "Kecepatan Angin (m/s)": [3.0]*7,
-        "Tekanan (hPa)": [1010.0]*7
-    }
-    df_input = pd.DataFrame(default_data, index=[f"Hari {i}" for i in range(1,8)])
-    edited_df = st.data_editor(df_input, num_rows="dynamic", use_container_width=True)
-
-    st.markdown("---")
-
-    # ---- Layout Kolom: Tombol Prediksi & Hasil ----
-    col1, col2 = st.columns([1,2])
-
-    with col1:
-        if st.button("✅ Prediksi Suhu Besok"):
-            try:
-                # Ambil data input
-                sequence_np = edited_df.to_numpy().astype(float)
-                sequence_scaled = scaler.transform(sequence_np)
-                final_input = sequence_scaled.reshape(1, 7, 4)
-                prediction_scaled = model.predict(final_input, verbose=0)
-
-                # Inverse transform hanya suhu
-                dummy = np.zeros((1, 4))
-                dummy[0, 0] = prediction_scaled[0, 0]
-                prediction_actual = scaler.inverse_transform(dummy)
-                result = prediction_actual[0, 0]
-
-                st.session_state['result'] = result  # Simpan hasil untuk kolom kedua
-
-            except Exception as e:
-                st.error(f"Terjadi kesalahan: {str(e)}")
-
-    with col2:
-        if 'result' in st.session_state:
-            # Card hasil prediksi
-            st.success(f"🌞 Prediksi Suhu Besok: **{st.session_state['result']:.2f} °C**")
-            st.info("Data 7 hari terakhir telah digunakan untuk prediksi.")
-
-            # Grafik tren input suhu
-            chart_suhu = alt.Chart(edited_df.reset_index()).mark_line(point=True, color='orange').encode(
-                x='index',
-                y='Suhu (°C)',
-                tooltip=['Suhu (°C)', 'Kelembaban (%)', 'Kecepatan Angin (m/s)', 'Tekanan (hPa)']
-            ).properties(title="📈 Tren Suhu 7 Hari Terakhir")
-            st.altair_chart(chart_suhu, use_container_width=True)
-
-            # Grafik tren kelembaban
-            chart_hum = alt.Chart(edited_df.reset_index()).mark_line(point=True, color='blue').encode(
-                x='index',
-                y='Kelembaban (%)',
-                tooltip=['Suhu (°C)', 'Kelembaban (%)', 'Kecepatan Angin (m/s)', 'Tekanan (hPa)']
-            ).properties(title="💧 Tren Kelembaban 7 Hari Terakhir")
-            st.altair_chart(chart_hum, use_container_width=True)
-
-
+# --- TOMBOL PREDIKSI ---
+if st.button("Prediksi Suhu Besok", type="primary"):
+    try:
+        # 1. Preprocessing Data
+        data_np = np.array(inputs).reshape(-1, 1) # Ubah ke array numpy
+        data_scaled = scaler.transform(data_np)   # Normalisasi (0-1)
+        
+        # 2. Reshape untuk ONNX (Batch=1, TimeSteps=7, Features=1)
+        # PENTING: Tipe data harus float32
+        final_input = data_scaled.reshape(1, 7, 1).astype(np.float32)
+        
+        # 3. PREDIKSI (Pakai ort_session, BUKAN model.predict)
+        outputs = ort_session.run([output_name], {input_name: final_input})
+        prediction_scaled = outputs[0]
+        
+        # 4. Inverse Transform (Kembalikan ke suhu asli)
+        hasil_prediksi = scaler.inverse_transform(prediction_scaled)[0][0]
+        
+        # 5. Tampilkan Hasil
+        st.success(f"Prediksi Suhu Besok: **{hasil_prediksi:.2f} °C**")
+        
+        # Opsional: Grafik Tren
+        st.subheader("Grafik Suhu Input")
+        st.line_chart(inputs)
+        
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat prediksi: {e}")
