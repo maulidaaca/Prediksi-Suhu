@@ -10,8 +10,8 @@ import random
 @st.cache_resource
 def load_resources():
     try:
-        model = tf.keras.models.load_model('model_aqi_7days.h5', compile=False)
-        scaler = joblib.load('scaler_aqi_7days.save')
+        model = tf.keras.models.load_model('model_suhu.h5', compile=False)
+        scaler = joblib.load('scaler_suhu.save')
         return model, scaler
     except Exception as e:
         return None, None
@@ -151,4 +151,5 @@ elif menu == "Prediksi Suhu":
                 tooltip=['Suhu (°C)', 'Kelembaban (%)', 'Kecepatan Angin (m/s)', 'Tekanan (hPa)']
             ).properties(title="💧 Tren Kelembaban 7 Hari Terakhir")
             st.altair_chart(chart_hum, use_container_width=True)
+
 
