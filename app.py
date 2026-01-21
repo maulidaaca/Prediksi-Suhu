@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import joblib
-import tensorflow as tf
 import altair as alt
 
 # =====================
@@ -147,3 +146,4 @@ elif menu == "Prediksi Suhu":
                 tooltip=['Suhu (°C)', 'Kelembaban (%)', 'Kecepatan Angin (m/s)', 'Tekanan (hPa)']
             ).properties(title="💧 Tren Kelembaban 7 Hari Terakhir")
             st.altair_chart(chart_hum, use_container_width=True)
+
